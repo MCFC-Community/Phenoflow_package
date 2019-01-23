@@ -6,6 +6,7 @@
 #' Defaults to FALSE. I would recommend to make sure samples have > 500 cells. Will denoise based on the parameters specified in `param`.
 #' @param param Parameters required to denoise the new_data
 #' @param TimeChannel Name of time channel in the FCS files. This can differ between flow cytometers. Defaults to "Time". You can check this by: colnames(flowSet).
+#' @param timesplit Fraction of timestep used in flowAI for denoising. Please consult the `flowAI::flow_auto_qc` function for more information. 
 #' @importFrom flowAI flow_auto_qc
 #' @keywords prediction, random forest, fcm
 #' @examples 
@@ -28,7 +29,7 @@
 #' @export
 
 RandomF_predict <- function(x, new_data, cleanFCS = FALSE,
-                            param = c("FL1-H", "FL3-H", "FSC-H", "SSC-H"),
+                            param = c("FL1-H", "FL3-H", "FSC-H", "SSC-H"),timesplit = 0.1,
                             TimeChannel = "Time") {
   if(cleanFCS == TRUE){
     cat(paste0("-------------------------------------------------------------------------------------------------", "\n"))
@@ -37,18 +38,23 @@ RandomF_predict <- function(x, new_data, cleanFCS = FALSE,
     cat(date(), paste0("--- Scatter parameters will be automatically excluded", "\n"))
     cat(paste0("-------------------------------------------------------------------------------------------------"))
     cat("\n", paste0("Please cite:", "\n"))
-    cat("\n", paste0("Monaco et al., flowAI: automatic and interactive anomaly discerning tools for flow cytometry data,\n Bioinformatics, Volume 32, Issue 16, 15 August 2016, Pages 2473–2480, \n https://doi.org/10.1093/bioinformatics/btw191", "\n"))
+    cat("\n", paste0("Monaco et al., flowAI: automatic and interactive anomaly discerning tools for flow cytometry data,\n Bioinformatics, Volume 32, Issue 16, 15 August 2016, Pages 2473-2480, \n https://doi.org/10.1093/bioinformatics/btw191", "\n"))
     cat(paste0("-------------------------------------------------------------------------------------------------", "\n \n"))
     
     # Extract sample names
     sam_names <- flowCore::sampleNames(new_data) 
     
     # Extract parameters not to base denoising on
-    param_f <- BiocGenerics::unique(gsub(param, pattern = "-H|-A", replacement = ""))
-    filter_param <- BiocGenerics::colnames(new_data)
-    filter_param <- BiocGenerics::unique(gsub(filter_param, pattern = "-H|-A", replacement = ""))
-    filter_param <- filter_param[!filter_param %in% param_f & filter_param!= TimeChannel]
-    filter_param <- c(filter_param, "FSC", "SSC")# Exclude all scatter information from denoising
+    param_f <- BiocGenerics::unique(gsub(param, pattern = "-H|-A|-W", 
+                                         replacement = ""))
+    filter_param <- BiocGenerics::colnames(x)
+    filter_param <- BiocGenerics::unique(gsub(filter_param, 
+                                              pattern = "-H|-A|-W", 
+                                              replacement = ""))
+    filter_param <- filter_param[!filter_param %in% param_f & 
+                                   filter_param!= TimeChannel]
+    filter_param <- c(filter_param, "FSC", "SSC")
+    # Exclude all scatter information from denoising
     add_measuredparam <- base::unique(gsub(".*-([A-Z])$","\\1",param))[1]
     # Denoise with flowAI
     new_data <- flowAI::flow_auto_qc(new_data, alphaFR = 0.01,
