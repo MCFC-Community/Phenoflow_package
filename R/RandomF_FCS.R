@@ -5,6 +5,7 @@
 #' @param sample_info Sample information necessary for the classification, has to 
 #' contain a column named "name"
 #' which matches the samplenames of the FCS files stored in the flowSet.
+#' @param sample_col Column name of the sample names in sample_info. Defaults to "name".
 #' @param target_label column name of the sample_info dataframe that should be 
 #' predicted based on the flow cytometry data.
 #' @param downsample Indicate to which sample size should be downsampled. 
@@ -20,6 +21,8 @@
 #' @param TimeChannel Name of time channel in the FCS files. This can differ between flow cytometers. Defaults to "Time". You can check this by: colnames(flowSet).
 #' @param plot_fig Should the confusion matrix and the overall performance statistics on the test data partition be visualized?
 #' Defaults to FALSE.
+#' @param method method used by caret::train for learning (defaults to Random forests)
+#' @param classification_type whether to perform sample-level or single-cell level classification (defaults to sample-level)
 #' @importFrom BiocGenerics unique colnames
 #' @importFrom flowAI flow_auto_qc 
 #' @importFrom caret trainControl createDataPartition train confusionMatrix
@@ -34,12 +37,13 @@
 #' # Format necessary metadata
 #' metadata <- data.frame(names = flowCore::sampleNames(flowData), 
 #' do.call(rbind, lapply(strsplit(flowCore::sampleNames(flowData),"_"), rbind)))
-#' colnames(metadata) <- c("name", "Cycle_nr", "Location", "day", 
+#' colnames(metadata) <- c("Sample_names", "Cycle_nr", "Location", "day", 
 #' "timepoint", "Staining", "Reactor_phase", "replicate")
 #' 
 #' # Run Random Forest classifier to predict the Reactor phase based on the
 #' # single-cell FCM data
-#' model_rf <- RandomF_FCS(flowData, sample_info = metadata, target_label = "Reactor_phase",
+#' model_rf <- RandomF_FCS(flowData, sample_info = metadata[1:10, ], sample_col = "Sample_names", 
+#' target_label = "Reactor_phase",
 #' downsample = 10)
 #' 
 #' # Make a model prediction on new data and report contigency table of predictions
@@ -55,8 +59,15 @@
 #'                        labels = flowCore::sampleNames(flowData_ax))
 #' 
 #' # Run Random forest model on 100 cells of each strain
-#' model_rf_syn <- RandomF_FCS(flowData_ax, sample_info = metadata_syn, target_label = "labels",
-#'                         downsample = 100, plot_fig = TRUE)
+#' model_rf_syn <-
+#'   RandomF_FCS(
+#'     flowData_ax,
+#'     sample_info = metadata_syn,
+#'     sample_col = "name",
+#'     target_label = "labels",
+#'     downsample = 100,
+#'     plot_fig = TRUE
+#'   )
 #'                         
 #' # Make predictions on each of the samples or on new data of the mixed communities
 #' model_pred_syn <- RandomF_predict(x = model_rf_syn[[1]], new_data =  flowData_ax, cleanFCS = FALSE)
@@ -64,15 +75,21 @@
 
 #' @export
 
-RandomF_FCS <- function(x, sample_info, target_label, downsample = 0, 
-                       classification_type = "sample",
-                       param = c("FL1-H", "FL3-H", "FSC-H", "SSC-H"),
-                       p_train = 0.75, seed = 777,
-                       cleanFCS = FALSE,
-                       timesplit = 0.1,
-                       TimeChannel = "Time",
-                       plot_fig = FALSE,
-                       method = "rf") {
+RandomF_FCS <- function(x,
+  sample_info,
+  sample_col = "name",
+  target_label,
+  downsample = 0,
+  classification_type = "sample",
+  param = c("FL1-H", "FL3-H", "FSC-H", "SSC-H"),
+  p_train = 0.75,
+  seed = 777,
+  cleanFCS = FALSE,
+  timesplit = 0.1,
+  TimeChannel = "Time",
+  plot_fig = FALSE,
+  method = "rf") {
+  
   # Set seed
   set.seed(seed)
   
@@ -85,6 +102,9 @@ RandomF_FCS <- function(x, sample_info, target_label, downsample = 0,
     cat("\n", paste0("Please cite:", "\n"))
     cat("\n", paste0("Monaco et al., flowAI: automatic and interactive anomaly discerning tools for flow cytometry data,\n Bioinformatics, Volume 32, Issue 16, 15 August 2016, Pages 2473-2480, \n https://doi.org/10.1093/bioinformatics/btw191", "\n"))
     cat(paste0("-------------------------------------------------------------------------------------------------", "\n \n"))
+
+    # Subset flowset to only samples in sample data
+    x <- x[sample_info[, sample_col]]
     
     # Extract sample names
     sam_names <- flowCore::sampleNames(x) 
@@ -107,11 +127,11 @@ RandomF_FCS <- function(x, sample_info, target_label, downsample = 0,
                               folder_results = "QC_flowAI",
                               fcs_highQ = "HighQ",
                               output = 1,
-                              ChFM = paste0(param_f[!param_f %in% 
-                                                      c("FSC","SSC")],"-",
-                                            add_measuredparam),
-                              timeCh=TimeChannel,
-                              ChRemoveFS = filter_param,
+                              timeCh = TimeChannel,
+                              ChExcludeFM = paste0(param_f[param_f %in% c("FSC",
+                                                                          "SSC")],
+                                                   "-", add_measuredparam),
+                              ChExcludeFS = filter_param,
                               second_fractionFR = timesplit
     )
     
@@ -131,9 +151,13 @@ RandomF_FCS <- function(x, sample_info, target_label, downsample = 0,
       
     }
   }
+  
+  # Subset flowset to only samples in sample data
+  x <- x[as.character(sample_info[, sample_col])]
+  
   # Step 0: Format metadata
-  Biobase::pData(x) <- base::cbind( Biobase::pData(x), 
-                    sample_info[base::order(base::match(as.character(sample_info[, "name"]),
+  Biobase::pData(x) <- base::cbind(Biobase::pData(x), 
+                    sample_info[base::order(base::match(as.character(sample_info[, sample_col]),
                                             as.character(Biobase::pData(x)[, "name"]))), 
                                 target_label])
   base::colnames(Biobase::pData(x))[2] <- target_label
@@ -214,7 +238,7 @@ RandomF_FCS <- function(x, sample_info, target_label, downsample = 0,
   cat(paste0("-----------------------------------------------------------------------------------------------------\n"))
   performance_metrics <- data.frame(metric = 1, 
                                     n_cells = c(table(test_data$label)), 
-                                    label = levels(test_data$label))
+                                    label = levels(as.factor(test_data$label)))
   for(n_label in 1:length(unique(test_data$label))){
     tmp <- test_data[test_data$label == unique(test_data$label)[n_label], ]
     tmp_pred <- stats::predict(RF_train, newdata = tmp)
@@ -256,7 +280,7 @@ RandomF_FCS <- function(x, sample_info, target_label, downsample = 0,
   # Make list containing model, confusion matrix, summary statistics and descision boundary
   results_list <- list()
   results_list[[1]] <- RF_train
-  results_list[[2]] <- caret::confusionMatrix(data = RF_pred, test_data$label)
+  results_list[[2]] <- caret::confusionMatrix(data = RF_pred, as.factor(test_data$label))
   # results_list[[3]] <- RF_pred_desc
 
   # Return diagnostic plots (confusion matrix + descision boundary)

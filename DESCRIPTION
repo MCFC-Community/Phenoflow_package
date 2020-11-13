@@ -1,20 +1,20 @@
 Package: Phenoflow
 Title: Advanced analysis of microbial flow cytometry data
-Version: 1.1.1
+Version: 1.1.2
 Authors@R: c(
     person("Ruben", "Props", email = "Ruben.Props@UGent.be", role = c("aut", "cre")),
     person("Frederiek-Maarten", "Kerckhof", email = "FrederiekMaarten.Kerckhof@UGent.be", role = "ctb"))
 BugReports: https://github.com/rprops/PhenoFlow/issues
 Description: Set of functions to calculate diversity estimates of microbial
     communities from FCM data (described in: doi: 10.1111/2041-210X.12607).
-Remotes: github::lievenclement/flowFDA
+Remotes: github::FMKerckhof/flowFDA, github::adw96/breakaway
 Suggests: 
     phyloseq,
     testthat,
     knitr,
     rmarkdown
 Depends:
-    R (>= 3.3.0), flowCore, flowClean, flowFDA, flowAI, foreach
+    R (>= 3.5.0), flowCore, flowClean, flowFDA, flowAI, foreach
 Imports:
     vegan,
     MESS,
@@ -26,13 +26,14 @@ Imports:
     data.table,
     gridExtra,
     multcomp,
+	phyloseq,
     mclust,
     MASS,
     flowViz,
     caret,
+    magrittr,
     randomForest,
     flowCore,
-    breakaway,
     lattice,
     devtools,
     scales,
@@ -46,12 +47,12 @@ Imports:
     utils,
     methods,
     flowFP,
+    tidyr,
     BiocGenerics
 biocViews: CellBasedAssays, FlowCytometry, Infrastructure, Software, Clustering
 License: GPL-2
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 7.1.0
 Date: 2018
 VignetteBuilder: knitr
-
